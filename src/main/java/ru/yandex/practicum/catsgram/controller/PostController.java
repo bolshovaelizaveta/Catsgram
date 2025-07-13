@@ -1,9 +1,9 @@
 package ru.yandex.practicum.catsgram.controller;
 
+import ru.yandex.practicum.catsgram.exception.ParameterNotValidException;
 import ru.yandex.practicum.catsgram.model.SortOrder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import ru.yandex.practicum.catsgram.model.Post;
 import ru.yandex.practicum.catsgram.service.PostService;
@@ -19,19 +19,27 @@ public class PostController {
 
     @GetMapping
     public List<Post> findAll(
+            @RequestParam(defaultValue = "desc") String sort,
+            @RequestParam(defaultValue = "0") Integer from,
+            @RequestParam(defaultValue = "10") Integer size) {
 
-            @RequestParam(name = "sort", defaultValue = "desc") String sort,
+        if (size <= 0) {
+            throw new ParameterNotValidException("size", "Размер должен быть больше нуля.");
+        }
+        if (from < 0) {
+            throw new ParameterNotValidException("from", "Начало выборки не может быть отрицательным.");
+        }
 
-            @RequestParam(name = "from", defaultValue = "0") Integer from,
-
-            // По умолчанию хотим 10 самых свежих постов
-            @RequestParam(name = "size", defaultValue = "10") Integer size) {
-
-        // Преобразуем строку в enum
-        SortOrder sortOrder = SortOrder.from(sort);
+        SortOrder sortOrder;
+        try {
+            sortOrder = SortOrder.from(sort);
+        } catch (IllegalArgumentException e) {
+            throw new ParameterNotValidException("sort", "Некорректное значение. Допустимые: asc, desc.");
+        }
 
         return postService.findAll(size, sortOrder, from);
     }
+
 
     @GetMapping("/{postId}")
     public Post findPostById(@PathVariable Long postId) {
