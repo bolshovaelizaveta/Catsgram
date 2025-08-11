@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16
+    container_name: catsgram-db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db-init:
+    image: postgres:16
+    container_name: db-init
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        psql postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB} -v ON_ERROR_STOP=1 <<-EOSQL
+          CREATE TABLE IF NOT EXISTS users (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            username VARCHAR(40) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            password VARCHAR(40) NOT NULL,
+            registration_date TIMESTAMP WITH TIME ZONE NOT NULL
+          );
+        
+          CREATE TABLE IF NOT EXISTS posts (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            author_id BIGINT NOT NULL REFERENCES users(id),
+            description TEXT,
+            post_date TIMESTAMP WITH TIME ZONE NOT NULL
+          );
+        
+          CREATE TABLE IF NOT EXISTS image_storage (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            original_name VARCHAR(255),
+            file_path VARCHAR(1024),
+            post_id BIGINT NOT NULL REFERENCES posts(id)
+          );
+        EOSQL
+
+  app:
+    image: catsgram-app
+    container_name: catsgram-app
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/${POSTGRES_DB}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+      - CATSGRAM_IMAGE_DIRECTORY=images

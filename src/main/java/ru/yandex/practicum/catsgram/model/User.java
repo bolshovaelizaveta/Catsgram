@@ -1,11 +1,9 @@
 package ru.yandex.practicum.catsgram.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
+import lombok.*;
+
 import java.time.Instant;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -18,4 +16,5 @@ public class User {
     private String email;
     private String password;
     private Instant registrationDate;
+    private List<Post> posts;
 }

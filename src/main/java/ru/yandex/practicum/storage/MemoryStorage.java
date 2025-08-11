@@ -19,7 +19,6 @@ public class MemoryStorage implements Storage {
         users.put(email, user);
     }
 
-    // Получение информации о пользователе
     @Override
     public User get(final String email) {
         if (email == null) {

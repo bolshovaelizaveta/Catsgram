@@ -2,83 +2,63 @@ package ru.yandex.practicum.catsgram.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import ru.yandex.practicum.catsgram.dal.PostRepository;
+import ru.yandex.practicum.catsgram.dal.UserRepository;
+import ru.yandex.practicum.catsgram.dto.NewPostRequest;
+import ru.yandex.practicum.catsgram.dto.PostDto;
+import ru.yandex.practicum.catsgram.dto.UpdatePostRequest;
 import ru.yandex.practicum.catsgram.exception.ConditionsNotMetException;
 import ru.yandex.practicum.catsgram.exception.NotFoundException;
+import ru.yandex.practicum.catsgram.mapper.PostMapper;
 import ru.yandex.practicum.catsgram.model.Post;
-import ru.yandex.practicum.catsgram.model.SortOrder;
+import ru.yandex.practicum.catsgram.model.User;
+import ru.yandex.practicum.catsgram.dal.ImageRepository;
+import ru.yandex.practicum.catsgram.model.Image;
 
 import java.time.Instant;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
 
-// Указываем, что класс PostService - является бином и его нужно добавить в контекст приложения
 @Service
-@RequiredArgsConstructor // Для внедрения зависимости через конструктор
+@RequiredArgsConstructor
 public class PostService {
-    private final Map<Long, Post> posts = new HashMap<>();
-    private final UserService userService;
+    private final PostRepository postRepository;
+    private final UserRepository userRepository;
+    private final ImageRepository imageRepository;
 
-    public List<Post> findAll(Integer size, SortOrder sort, Integer from) {
-        Comparator<Post> comparator = Comparator.comparing(Post::getPostDate);
-        if (sort == SortOrder.DESCENDING) {
-            comparator = comparator.reversed();
-        } // Метод sorted() принимает Comparator (сравнение)
+    public PostDto createPost(NewPostRequest newPostRequest) {
+        User author = userRepository.findById(newPostRequest.getAuthorId())
+                .orElseThrow(() -> new ConditionsNotMetException("Указанный автор не найден"));
 
-        return posts.values().stream()
-                .sorted(comparator)
-                .skip(from) // Пропускаем первые 'from' элементов
-                .limit(size) // Ограничиваем количество элементов до 'size'
-                .collect(Collectors.toList()); // Собираем обратно в список
+        Post post = PostMapper.mapToPost(newPostRequest, author);
+        postRepository.save(post);
+        return PostMapper.mapToPostDto(post);
     }
 
-    public Post findPostById(Long postId) {
-        return Optional.ofNullable(posts.get(postId))
-                .orElseThrow(() -> new NotFoundException("Пост с id=" + postId + " не найден"));
+    public PostDto getPostById(long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new NotFoundException("Пост с идентификатором " + postId + " не найден."));
+
+        List<Image> images = imageRepository.findByPostId(postId);
+        post.setImages(images);
+
+        return PostMapper.mapToPostDto(post);
     }
 
-    // Метод возвращает Optional. Для взаимодействия между сервисами
-    public Optional<Post> findById(long postId) {
-        return Optional.ofNullable(posts.get(postId));
-    }
-
-    public Post create(Post post) {
-        Long authorId = post.getAuthorId();
-        // Метод findUserById вернёт Optional<User>
-        if (userService.findUserById(authorId).isEmpty()) {
-            throw new ConditionsNotMetException("Автор с id = " + authorId + " не найден");
+    public PostDto updatePost(long postId, UpdatePostRequest request) {
+        if (request.getDescription() == null || request.getDescription().isBlank()) {
+            throw new ConditionsNotMetException("Текст публикации не может быть пустым");
         }
 
-        if (post.getDescription() == null || post.getDescription().isBlank()) {
-            throw new ConditionsNotMetException("Описание не может быть пустым");
-        }
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new NotFoundException("Пост с идентификатором " + postId + " не найден."));
 
-        post.setId(getNextId());
+        post.setDescription(request.getDescription());
         post.setPostDate(Instant.now());
-        posts.put(post.getId(), post);
-        return post;
-    }
+        postRepository.update(post);
 
-    public Post update(Post newPost) {
-        if (newPost.getId() == null) {
-            throw new ConditionsNotMetException("Id должен быть указан");
-        }
-        if (posts.containsKey(newPost.getId())) {
-            Post oldPost = posts.get(newPost.getId());
-            if (newPost.getDescription() == null || newPost.getDescription().isBlank()) {
-                throw new ConditionsNotMetException("Описание не может быть пустым");
-            }
-            oldPost.setDescription(newPost.getDescription());
-            return oldPost;
-        }
-        throw new NotFoundException("Пост с id = " + newPost.getId() + " не найден");
-    }
+        List<Image> images = imageRepository.findByPostId(postId);
+        post.setImages(images);
 
-    private long getNextId() {
-        long currentMaxId = posts.keySet()
-                .stream()
-                .mapToLong(id -> id)
-                .max()
-                .orElse(0);
-        return ++currentMaxId;
+        return PostMapper.mapToPostDto(post);
     }
 }
