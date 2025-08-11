@@ -36,3 +36,9 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Docker ###
+.env
+
+# Игнорируем данные базы данных
+/db-data/
